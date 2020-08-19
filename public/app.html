@@ -342,51 +342,50 @@
         });
         btnRestore.el.addEventListener("change",async (e)=>{
             if(e.target.files.length>0) {
-                var file = e.target.files[0];
+                var file_info = e.target.files[0];
                 let reader = new FileReader();
-                reader.onload = async function(e) {
-                    let blob = new Blob([new Uint8Array(e.target.result)]);
-                    var zip = await JSZip.loadAsync(blob);
-                    var meta_json_str = await zip.file("__meta__.json").async("string");
-                    var meta_json = JSON.parse(meta_json_str);
-                    for(var file in meta_json) {
-                        var meta = await app.db.files_meta.find("name",file);
-                        console.log(file,meta_json[file]);
-                        if(meta == null) {
-                            if(meta_json[file].type == "text") {
-                                var text = await zip.file(file).async("string");
-                                app.saveText(file,text);
-                            } else {
-                                var fblob = await zip.file(file).async("blob");
-                                app.saveBlob(file,fblob);
-                            }
-                        } else {
-                            var choice = await new Promise(async (resolve,reject)=>{
-                                var schema = await msg.$.elementSetPacketAsync(`
-                                    <div style="margin:10px;border:solid 1px #000;padding:20px;">
-                                        <div style="font-size:30px;">Zip Restore</div>
-                                        <div style="padding:20px;">
-                                            <div>Do you like to overwrite ${file}?</div>
-                                            <div>
-                                                <button id="btnYes">yes</button>
-                                                <button id="btnNo">no</button>
-                                                <button id="btnCancel">cancel</button>
-                                            </div>
-                                        </div>
+
+                async function overwrite_dialog(file) {
+                    var choice = await new Promise(async (resolve,reject)=>{
+                        var schema = await msg.$.elementSetPacketAsync(`
+                            <div style="margin:10px;border:solid 1px #000;padding:20px;">
+                                <div style="font-size:30px;">Zip Restore</div>
+                                <div style="padding:20px;">
+                                    <div>Do you like to overwrite ${file}?</div>
+                                    <div>
+                                        <button id="btnYes">yes</button>
+                                        <button id="btnNo">no</button>
+                                        <button id="btnCancel">cancel</button>
                                     </div>
-                                `);
-                                schema.el.btnYes.addEventListener("click",()=>{
-                                    resolve(1);
-                                });
-                                schema.el.btnNo.addEventListener("click",()=>{
-                                    resolve(2);
-                                });
-                                schema.el.btnCancel.addEventListener("click",()=>{
-                                    resolve(3);
-                                });
-                            });
-                            if(choice == 3) break;
-                            if(choice == 1) {
+                                </div>
+                            </div>
+                        `);
+                        schema.el.btnYes.addEventListener("click",()=>{
+                            resolve(1);
+                        });
+                        schema.el.btnNo.addEventListener("click",()=>{
+                            resolve(2);
+                        });
+                        schema.el.btnCancel.addEventListener("click",()=>{
+                            resolve(3);
+                        });
+                    });
+                    msg.$.elementsClear();
+                    return choice;
+                    
+
+                }
+                reader.onload = async function(e2) {
+                    console.log(file_info);
+                    let blob = new Blob([new Uint8Array(e2.target.result)]);
+                    if(file_info.type == "application/zip") {
+                        var zip = await JSZip.loadAsync(blob);
+                        var meta_json_str = await zip.file("__meta__.json").async("string");
+                        var meta_json = JSON.parse(meta_json_str);
+                        for(var file in meta_json) {
+                            var meta = await app.db.files_meta.find("name",file);
+                            console.log(file,meta_json[file]);
+                            if(meta == null) {
                                 if(meta_json[file].type == "text") {
                                     var text = await zip.file(file).async("string");
                                     app.saveText(file,text);
@@ -394,12 +393,33 @@
                                     var fblob = await zip.file(file).async("blob");
                                     app.saveBlob(file,fblob);
                                 }
+                            } else {
+                                var choice = await overwrite_dialog(file);
+                                if(choice == 3) break;
+                                if(choice == 1) {
+                                    if(meta_json[file].type == "text") {
+                                        var text = await zip.file(file).async("string");
+                                        app.saveText(file,text);
+                                    } else {
+                                        var fblob = await zip.file(file).async("blob");
+                                        app.saveBlob(file,fblob);
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        var meta = await app.db.files_meta.find("name",file_info.name);
+                        if(meta==null) {
+                            app.saveBlob(file_info.name,blob);
+                        } else {
+                            var choice = await overwrite_dialog(file_info.name);
+                            if(choice == 1) {
+                                app.saveBlob(file,fblob);
                             }
                         }
                     }
-                    msg.$.elementsClear();
                 };
-                reader.readAsArrayBuffer(file);
+                reader.readAsArrayBuffer(file_info);
             }
         });
         await app.loadSuper("/sys/boot.super");
