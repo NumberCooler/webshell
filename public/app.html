@@ -29,8 +29,8 @@
 </div>
 
 <script>
-    editorContainer.el.style.width = (window.innerWidth-2) + "px";
-    editor.el.style.width = (window.innerWidth-2) + "px";
+    editorContainer.el.style.width = (window.innerWidth-20) + "px";
+    editor.el.style.width = (window.innerWidth-20) + "px";
     const AssetSpec = {
         name : "test",
         releases : [{
@@ -300,7 +300,7 @@
                 }
             }
         });
-        app.editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, async function() {
+        app.editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, function() {
             mark.el.style.display = "";
             mark.el.style.backgroundColor = "lime";
             var code = app.build(app.editor.getValue(),true);
