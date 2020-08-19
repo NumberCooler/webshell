@@ -1,0 +1,356 @@
+<Component id="IDB" src="/IDB.html"></Component>
+<style>
+    body {
+        margin:0px;
+    }
+</style>
+<Component id="loader"></Component>
+<div>
+    <Component id="ui"></Component>
+</div>
+<div>
+    <Component id="error"></Component>
+</div>
+<div>
+    <Component id="msg"></Component>
+</div>
+<div id="mark" style="display:none;border:solid 1px #000;width:10px;height:10px;"></div>
+<div id="terminal">
+    <div id="editorContainer" style="border:solid 1px #000;width:800px;">
+        <div id="editor" style="position:relative;width:800px;height:800px;"></div>
+    </div>
+    
+    <div id="editorPanel">
+        <button id="btnSave">save</button>
+        <button id="btnSaveAs">save as</button>
+        <button id="btnBackup">backup</button>
+        <input type="file" id="btnRestore" value="restore"/>
+    </div>
+</div>
+
+<script>
+    editorContainer.el.style.width = (window.innerWidth-2) + "px";
+    editor.el.style.width = (window.innerWidth-2) + "px";
+    const AssetSpec = {
+        name : "test",
+        releases : [{
+            version : 1,
+            schema : {
+                files : {
+                    blob : {},
+                    _meta : {
+                        index : []
+                    }
+                },
+                files_meta : {
+                    name : {unique:true},
+                    fileid : {},
+                    date : {},
+                    comments : {},
+                    type : {},
+                    _meta : {
+                        index : ["name","date"]
+                    }
+                }
+            }
+        }]
+    };
+    var app = {};
+    app.settings = {
+        terminal : {
+            visible : true
+        }
+    };
+    app.sector = {
+        ui,
+        msg,
+        error,
+        loader
+    };
+    app.db = await IDB.exports.service(AssetSpec);
+    app.saveText = async function(name,value) {
+        
+        var meta = await app.db.files_meta.find("name",name);
+        var bw = new BinaryWriter();
+        var file_ab = Binary.str2utf8ab(value);
+        bw.add(file_ab);
+        if(meta) {
+            await app.db.files.update(meta.fileid,bw.toBlob());
+        } else {
+            var file_id = await app.db.files.add(bw.toBlob());
+            
+            var meta_id = await app.db.files_meta.add({
+                name: name,
+                fileid : file_id, 
+                type : "text",
+                date : (new Date()).toISOString(), 
+                comments : "{}"
+            });
+        }
+        console.log(name + " saved.");
+    }
+    var default_counter = 0;
+    app.saveBlob = async function(name,value) {
+        if(name === null || name === undefined || Object.prototype.toString.apply(name) != "[object String]" || name == "" ) {
+            alert("name not defined.");
+            name = "default" + default_counter;
+            default_counter++;
+        }
+        var meta = await app.db.files_meta.find("name",name);
+        var bw = new BinaryWriter();
+        bw.add(await value.arrayBuffer());
+        if(meta) {
+            await app.db.files.update(meta.fileid,bw.toBlob());
+        } else {
+            var file_id = await app.db.files.add(bw.toBlob());
+            var meta_id = await app.db.files_meta.add({
+                name: name,
+                fileid : file_id, 
+                type : "blob",
+                date : (new Date()).toISOString(), 
+                comments : "{}"
+            });
+        }
+        console.log(name + " saved.");
+    }
+    app.loadText = async function(name) {
+        if(name === null || name === undefined || Object.prototype.toString.apply(name) != "[object String]" || name == "" ) {
+            alert("name not defined.");
+            name = "default" + default_counter;
+            default_counter++;
+        }
+        app.file = name;
+        var meta = await app.db.files_meta.find("name",name);
+        if(meta && meta.type == "text") {
+            var blob = await app.db.files.find(meta.fileid);
+            var ret = Binary.utf8ab2str( await blob.arrayBuffer(), blob.size );
+            msg.$.elementSetPacketAsync(`<div style="font-size:30px;">${name}</div>`);
+            return ret;
+        }
+        console.log("not found : " + name);
+        return null;
+    }
+    app.loadBlob = async function(name) {
+        var meta = await app.db.files_meta.find("name",name);
+        if(meta && meta.type == "blob") {
+            var blob = await app.db.files.find(meta.fileid);
+            var br = new BinaryReader(blob,await blob.arrayBuffer());
+            var nblob = br.toBlob(size);
+            msg.$.elementSetPacketAsync(`<div style="font-size:30px;">${name}</div>`);
+            return nblob;
+        }
+        console.log("not found : " + name);
+        return null;
+    }
+    app.delete = async function(name) {
+        var meta = await app.db.files_meta.find("name",name);
+        if(meta) {
+            console.log("A",meta.fileid);
+            await app.db.files.delete(meta.fileid);
+            var metaid = await app.db.files_meta.findId("name",name);
+            console.log("B",metaid);
+            await app.db.files_meta.delete(metaid);
+        }
+    }
+    app.ls = async function() {
+        var ret = [];
+        var ids = await app.db.files_meta.findAllIds();
+        for(var x = 0; x < ids.length;x++) {
+            ret.push(await app.db.files_meta.find(ids[x]));
+        }
+        return ret;
+    }
+    app.context = {};
+    app.restoreError = async function() {
+        app.editor.setValue(await app.loadText(app.file));
+    }
+    app.backup = async function(name) {
+        var zip = new JSZip();
+        var ids = await app.db.files_meta.findAllIds();
+        var gmeta = {};
+        for(var x =0; x < ids.length;x++) {
+            var meta = await app.db.files_meta.find(ids[x]);
+            gmeta[meta.name] = meta;
+            console.log( await app.db.files.find(meta.fileid) );
+            zip.file(meta.name,await app.db.files.find(meta.fileid));
+        }
+        zip.file("__meta__.json",JSON.stringify(gmeta));
+        var blob = await zip.generateAsync({type:"blob"});
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        if(name) {
+            a.download = name + ".zip";
+        } else {
+            a.download = 'backup.zip';
+        }
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        }, 5000);
+    }
+    app.build = function(code,recover) {
+        return `(async ()=>{
+            // remove of scope
+
+            
+            try {
+                
+                    
+                    `+code+`
+                
+            } catch(e) {
+                mark.el.style.display = "";
+                mark.el.style.backgroundColor = "red";
+                `
+                +(recover? `app.restoreError();`:"")+
+                `
+                error.$.elementSetPacketAsync(\`<div style="font-size:20px;color:red;">\`+(""+e)+\`</div>\`);
+                setTimeout(()=>{
+                    mark.el.style.display = "none";
+                },1000);
+                setTimeout(()=>{
+                    error.$.elementsClear();
+                },5000);
+            }
+        })();`;
+    }
+    app.toogleTerminal = function() {
+        if(app.settings.terminal.visible) {
+            terminal.el.style.display = "none";
+            app.settings.terminal.visible = false;
+            document.getElementsByTagName("body")[0].focus();
+        } else {
+            terminal.el.style.display = "";
+            app.settings.terminal.visible = true;
+            app.editor.focus();
+            editorPanel.el.scrollIntoView();
+        }
+    }
+    app.loadSuper = async function(name) {
+        var s = await app.loadText(name);
+        if(s!=null) {
+            console.log(name,s);
+            await loader.$.elementSetPacketAsync(`
+                <Component srcData={{this.data}} app={{this.app}}></Component>
+            `,{context:{
+                data:s, app
+            }});
+        }
+    }
+    var ctrl = false;
+    window.addEventListener("keydown",(e)=>{
+        console.log(e.keyCode);
+
+        if(ctrl && (e.keyCode == 79 || e.keyCode == 83)) {
+            e.preventDefault();
+        }
+        if(e.keyCode == 17) {
+            ctrl = true;
+        }
+
+        if(ctrl && e.keyCode == 192) {
+            e.preventDefault();
+            app.toogleTerminal();
+            
+        }
+
+        return false;
+    },true)
+    window.addEventListener("keyup",(e)=>{
+        
+        if(e.keyCode == 17) {
+            ctrl = false;
+        }
+        //e.preventDefault();
+
+        if(!ctrl) {
+            if(e.keyCode == 27) {
+                app.editor.focus();
+            }
+            return true;
+        }
+
+        
+        return false;
+    },true);
+    require(['vs/editor/editor.main'], async function() {
+        app.editor = monaco.editor.create(editor.el, {
+            value: "",
+            language: "html",
+            fontFamily : "'Noto Mono', 'Courier New', monospace"
+        });
+        //app.editor.model.onDidChangeContent((event) => {
+          //  app.editor.setModelLanguage(app.editor.getModels()[0], languages[ext]);
+        //});
+        app.editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KEY_O, function() {
+            app.editor.setValue("app.editor.setValue(await app.loadText(\"\"));");
+        });
+        app.editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KEY_S, function() {
+            if(app.file) {
+                app.saveText(app.file,app.editor.getValue());
+            } else {
+                var filename = prompt("file name:");
+                if(filename && filename != "") {
+                    app.saveText(filename,app.editor.getValue());
+                } else {
+                    alert("not saved.");
+                }
+            }
+        });
+        app.editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, async function() {
+            mark.el.style.display = "";
+            mark.el.style.backgroundColor = "lime";
+            var code = app.build(app.editor.getValue(),true);
+            console.log(code);
+            eval(code);
+            setTimeout(()=>{
+                mark.el.style.display = "none";
+            },1000);
+        });
+        btnSave.el.addEventListener("click",()=>{
+            if(app.file) {
+                app.saveText(app.file,app.editor.getValue());
+            } else {
+                var filename = prompt("file name:");
+                if(filename && filename != "") {
+                    app.saveText(filename,app.editor.getValue());
+                } else {
+                    alert("not saved.");
+                }
+            }
+        });
+        btnSaveAs.el.addEventListener("click",()=>{
+            var filename = prompt("file name:");
+            app.saveText(filename,app.editor.getValue());
+        });
+        btnBackup.el.addEventListener("click",()=>{
+            app.backup("backup");
+        });
+        btnRestore.el.addEventListener("change",(e)=>{
+            if(e.target.files.length>0) {
+                var file = e.target.files[0];
+                let reader = new FileReader();
+                reader.onload = function(e) {
+                    // let blob = new Blob([new Uint8Array(e.target.result)], {type: file.type });
+                    var zip = new JSZip();
+
+                };
+                reader.readAsArrayBuffer(file);
+            }
+        });
+        await app.loadSuper("/sys/boot.super");
+
+        var d = await app.loadText("default");
+        if(d==null) {
+            console.log("load 0");
+            await app.saveText("default","");
+            d = await app.loadText("default");
+        }
+        app.editor.setValue(d);
+        console.log("load");
+    });
+</script>

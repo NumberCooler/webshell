@@ -1,0 +1,26 @@
+<!doctype html>
+<html>
+    <head>
+		<meta charset="utf-8"/>
+		<script src="/js/core/import.js"></script>
+        <script src="/js/core/core.js"></script>
+        <script src="/js/control/jszip/dist/jszip.min.js"></script>
+        <script src="/js/control/jquery/1.9.1/jquery.min.js"></script>
+        <script src="/js/control/bootstrap/2.3.1/bootstrap.min.js"></script>
+        <script>
+        var require={ paths : { vs : '/js/control/monaco/dev/vs'} };
+        </script>
+        <script src="/js/control/monaco/dev/vs/loader.js"></script>
+        
+        <script>
+            UI.init(async ()=>{
+                var schema = await UI.Body.elementPushPacketAsync(`
+					<Component id="app" src="/app.html"></Component>
+				`);
+			});
+
+        </script>
+    </head>
+    <body>
+    </body>
+</hmtl>
