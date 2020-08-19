@@ -241,9 +241,14 @@
         }
     }
     var ctrl = false;
-    window.addEventListener("keydown",(e)=>{
+    window.addEventListener("keydown",async (e)=>{
         console.log(e.keyCode);
 
+        if(ctrl && e.keyCode == 68) {
+            var text = await app.loadText("default");
+            app.editor.setValue(text);
+            e.preventDefault();
+        }
         if(ctrl && (e.keyCode == 79 || e.keyCode == 83)) {
             e.preventDefault();
         }
@@ -285,6 +290,10 @@
         //app.editor.model.onDidChangeContent((event) => {
           //  app.editor.setModelLanguage(app.editor.getModels()[0], languages[ext]);
         //});
+
+        app.editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KEY_D, function() {
+            
+        });
         app.editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KEY_O, function() {
             app.editor.setValue("app.editor.setValue(await app.loadText(\"\"));");
         });
