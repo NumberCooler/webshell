@@ -230,15 +230,35 @@
             editorPanel.el.scrollIntoView();
         }
     }
-    app.loadSuper = async function(name) {
-        var s = await app.loadText(name);
-        if(s!=null) {
-            console.log(name,s);
-            await loader.$.elementSetPacketAsync(`
-                <Component srcData={{this.data}} app={{this.app}}></Component>
-            `,{context:{
-                data:s, app
-            }});
+    app.loadSuper = async function(name,extra) {
+        console.log(name);
+        try {
+            var s = await app.loadText(name);
+            if(s!=null) {
+                if(extra) {
+                    var args = {};
+                    var sb = [];
+                    var sb0 = [];
+                    for(var key in extra) {
+                        sb.push(key + "={{this.extra[" + JSON.stringify(key)+"]}}");
+                    }
+                    await loader.$.elementSetPacketAsync(`
+                        <Component srcData={{this.data}} app={{this.app}} ${sb.join(" ")}></Component>
+                    `,{context:{
+                        data:s, app,extra:args
+                    }});
+                } else {
+                    await loader.$.elementSetPacketAsync(`
+                        <Component srcData={{this.data}} app={{this.app}}></Component>
+                    `,{context:{
+                        data:s, app
+                    }});
+                }
+            }
+        } catch(e) {
+            console.log(e);
+            console.log(e.stack);
+            throw new Error("failed to load " + name);
         }
     }
     var ctrl = false;
