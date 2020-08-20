@@ -242,18 +242,22 @@
                     for(var key in extra) {
                         sb.push(key + "={{this.extra[" + JSON.stringify(key)+"]}}");
                     }
-                    await loader.$.elementSetPacketAsync(`
-                        <Component srcData={{this.data}} app={{this.app}} ${sb.join(" ")}></Component>
+                    var schema = await loader.$.elementSetPacketAsync(`
+                        <Component id="control" srcData={{this.data}} app={{this.app}} ${sb.join(" ")}></Component>
                     `,{context:{
                         data:s, app,extra:args
                     }});
+                    return schema.exports.control;
                 } else {
-                    await loader.$.elementSetPacketAsync(`
-                        <Component srcData={{this.data}} app={{this.app}}></Component>
+                    var schema = await loader.$.elementSetPacketAsync(`
+                        <Component id="control" srcData={{this.data}} app={{this.app}}></Component>
                     `,{context:{
                         data:s, app
                     }});
+                    return schema.exports.control;
                 }
+            } else {
+                throw new Error("file " + name + " not found.");
             }
         } catch(e) {
             console.log(e);
