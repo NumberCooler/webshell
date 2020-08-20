@@ -57,6 +57,7 @@
         }]
     };
     var app = {};
+    app.events = Class.create("WithEvents");
     app.settings = {
         terminal : {
             visible : true
@@ -192,7 +193,11 @@
             window.URL.revokeObjectURL(url);
         }, 5000);
     }
-    app.build = function(code,recover) {
+    app.build = function(code,recover,trackId) {
+        var sb = [];
+        if(trackId) {
+            sb.push("app.events.emit(" + JSON.stringify(trackId) + ");");
+        }
         return `(async ()=>{
             // remove of scope
 
@@ -201,13 +206,14 @@
                 
                     
                     `+code+`
-                
+                ${sb.join("")}    
             } catch(e) {
                 mark.el.style.display = "";
                 mark.el.style.backgroundColor = "red";
                 `
                 +(recover? `app.restoreError();`:"")+
                 `
+                app.editor.updateOptions({ readOnly: false });
                 error.$.elementSetPacketAsync(\`<div style="font-size:20px;color:red;">\`+(""+e)+\`</div>\`);
                 setTimeout(()=>{
                     mark.el.style.display = "none";
@@ -336,14 +342,25 @@
             }
         });
         app.editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, function() {
+            var current = app.file.slice(0);
+            var currentCode = app.editor.getValue();
             mark.el.style.display = "";
             mark.el.style.backgroundColor = "lime";
-            var code = app.build(app.editor.getValue(),true);
+            var code = app.build(currentCode,true,"execComplete");
             console.log(code);
+            app.editor.updateOptions({ readOnly: true });
             eval(code);
+            var f = async ()=>{
+                app.editor.updateOptions({ readOnly: false });
+                await app.loadText(current)
+                app.editor.setValue( currentCode );
+                app.events.off("execComplete",f);
+            };
+            app.events.on("execComplete",f);
             setTimeout(()=>{
                 mark.el.style.display = "none";
             },1000);
+            
         });
         btnSave.el.addEventListener("click",()=>{
             if(app.file) {
@@ -368,7 +385,6 @@
             if(e.target.files.length>0) {
                 var file_info = e.target.files[0];
                 let reader = new FileReader();
-
                 async function overwrite_dialog(file) {
                     var choice = await new Promise(async (resolve,reject)=>{
                         var schema = await msg.$.elementSetPacketAsync(`
@@ -396,8 +412,6 @@
                     });
                     msg.$.elementsClear();
                     return choice;
-                    
-
                 }
                 reader.onload = async function(e2) {
                     console.log(file_info);
