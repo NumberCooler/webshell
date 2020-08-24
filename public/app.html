@@ -66,6 +66,7 @@
         }]
     };
     var app = {};
+    window.APP = app;
     app.events = Class.create("WithEvents");
     app.settings = {
         terminal : {
@@ -106,7 +107,7 @@
     var default_counter = 0;
     app.saveBlob = async function(name,value) {
         if(name === null || name === undefined || Object.prototype.toString.apply(name) != "[object String]" || name == "" ) {
-            alert("name not defined.");
+            alert("name not defined (1).");
             name = "default" + default_counter;
             default_counter++;
         }
@@ -134,16 +135,16 @@
     }
     app.loadText = async function(name) {
         if(name === null || name === undefined || Object.prototype.toString.apply(name) != "[object String]" || name == "" ) {
-            alert("name not defined.");
+            alert("name not defined (2).");
             name = "default" + default_counter;
             default_counter++;
         }
-        app.file = name;
         var meta = await app.db.files_meta.find("name",name);
         if(meta && meta.type == "text") {
             var blob = await app.db.files.find(meta.fileid);
             var ret = Binary.utf8ab2str( await blob.arrayBuffer(), blob.size );
-            msg.$.elementSetPacketAsync(`<div style="font-size:30px;">${name}</div>`);
+            console.log(ret);
+            //msg.$.elementSetPacketAsync(`<div style="font-size:30px;">${name}</div>`);
             return ret;
         }
         console.log("not found : " + name);
@@ -257,6 +258,7 @@
         console.log(name);
         try {
             var s = await app.loadText(name);
+            console.log("load super:",name,s);
             if(s!=null) {
                 if(extra) {
                     var args = {};
@@ -516,12 +518,18 @@ app.editor.flags.change = true;
         }
 
         var d = await app.loadText("default");
+        app.file = "default";
         if(d==null) {
             console.log("load 0");
             await app.saveText("default","");
             d = await app.loadText("default");
+
+            app.file = "default";
+            
         }
         app.editor.setValue(d);
+        app.sector.msg.$.elementSetPacketAsync(`<div style="font-size:30px;">default</div>`);
+
         console.log("load");
     });
 </script>

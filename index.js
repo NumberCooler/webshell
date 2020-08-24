@@ -1,11 +1,13 @@
 const express = require('express');
 
+
 var server = express();
 server.use('/',express.static('./public'));
 
+const Url = require('url').URL;
 
 server.post('/api/request',(req,res)=>{
-    const Url = require('url').URL;
+    
     const http = require('http');
     const https = require('https');
 
@@ -88,7 +90,29 @@ server.post('/api/request',(req,res)=>{
 
 });
 
+var httpProxy = require('http-proxy');
+
+var proxy = null;
+try {
+    proxy = httpProxy.createServer({
+        target: "https://www.google.com",
+        rejectUnauthorized : false,
+        followRedirects : false,
+        ssl : false
+    });
+    proxy.listen(8081,() => { console.log("proxy in 8081"); });
+} catch(e) {
+    console.log(e);
+    if(proxy) {
+        proxy.close();
+    }
+}
+
 var port = 8080;
 server.listen(port,()=>{
     console.log('listening ' + port);
 });
+
+
+
+
