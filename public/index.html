@@ -5,21 +5,27 @@
 		<script src="/js/core/import.js"></script>
         <script src="/js/core/core.js"></script>
         <script src="/js/control/jszip/dist/jszip.min.js"></script>
-        <script src="/js/control/jquery/1.9.1/jquery.min.js"></script>
-        <script src="/js/control/bootstrap/2.3.1/bootstrap.min.js"></script>
+        
+        <link rel="stylesheet" href="/js/control/bootstrap/4.5.2/bootstrap.min.css" />
+        <script src="/js/control/jquery/3.5.1/jquery-3.5.1.slim.min.js"></script>
+        <script src="/js/control/popper/1.16.1/popper.min.js"></script>
+        <script src="/js/control/bootstrap/4.5.2/bootstrap.min.js"></script>
         <script>
         var require={ paths : { vs : '/js/control/monaco/dev/vs'} };
         </script>
         <script src="/js/control/monaco/dev/vs/loader.js"></script>
-        
+        <title>Webshell</title>
         <script>
             UI.init(async ()=>{
+                UI.Body.canSelect(false);
                 var schema = await UI.Body.elementPushPacketAsync(`
 					<Component id="app" src="/app.html"></Component>
 				`);
 			});
 
         </script>
+        <link rel="icon" href="favicon.png">
+        <link rel="shortcut icon" href="favicon.png">
     </head>
     <body>
     </body>

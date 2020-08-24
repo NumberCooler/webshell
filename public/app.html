@@ -4,34 +4,43 @@
         margin:0px;
     }
 </style>
-<Component id="loader"></Component>
-<div>
-    <Component id="ui"></Component>
-</div>
-<div>
-    <Component id="error"></Component>
-</div>
-<div>
-    <Component id="msg"></Component>
-</div>
-<div id="mark" style="display:none;border:solid 1px #000;width:10px;height:10px;"></div>
-<div id="terminal">
-    <div id="editorPanel">
-        <button id="btnSave">save</button>
-        <button id="btnSaveAs">save as</button>
-        <button id="btnBackup">backup</button>
-        <input type="file" id="btnRestore" value="restore"/>
+<div class="mx-2">
+    <Component id="loader"></Component>
+    <div>
+        <Component id="ui"></Component>
     </div>
-    <div id="editorContainer" style="border:solid 1px #000;width:800px;">
-        <div id="editor" style="position:relative;width:800px;height:800px;"></div>
+    <div>
+        <Component id="error"></Component>
     </div>
-    
-    
-</div>
+    <div id="terminal" class="mt-2">
+        <div style="border:solid 1px #000;padding-left:20px;background-color:black;color:white;display:flex;" class="mb-1">
+            <div>
+                <Component id="msg"></Component>
+            </div>
+            <div style="flex:1;"></div>
+            <div id="editorPanel">
+                <button id="btnSave" class="btn btn-primary my-1">Save</button>
+                <button id="btnSaveAs" class="btn btn-primary ml-1 my-1">Save as</button>
+                <button id="btnBackup" class="btn btn-primary ml-1 my-1">Backup</button>
+                <button class="btn btn-primary m-1" style="position:relative;">
+                    Upload
+                    <input type="file" id="btnRestore" value="restore" style="position:absolute;left:0px;top:0px;width:74px;height:40px;opacity:0.1;"/>
+                </button>
 
+                
+            </div>
+        </div>
+        <div id="mark" style="display:none;border:solid 1px #000;width:10px;height:10px;"></div>
+        <div id="editorContainer" style="border:solid 1px #000;width:800px;">
+            <div id="editor" style="position:relative;width:800px;height:780px;"></div>
+        </div>
+        
+        
+    </div>
+</div>
 <script>
-    editorContainer.el.style.width = (window.innerWidth-20) + "px";
-    editor.el.style.width = (window.innerWidth-20) + "px";
+    editorContainer.el.style.width = (window.innerWidth-40) + "px";
+    editor.el.style.width = (window.innerWidth-40) + "px";
     const AssetSpec = {
         name : "test",
         releases : [{
@@ -71,7 +80,7 @@
     };
     app.db = await IDB.exports.service(AssetSpec);
     app.saveText = async function(name,value) {
-        
+        var file_backup = app.file;
         var meta = await app.db.files_meta.find("name",name);
         var bw = new BinaryWriter();
         var file_ab = Binary.str2utf8ab(value);
@@ -88,6 +97,9 @@
                 date : (new Date()).toISOString(), 
                 comments : "{}"
             });
+            await app.events.emit("file.changed");
+            await msg.$.elementSetPacketAsync(`<div style="font-size:30px;">${file_backup}</div>`);
+            app.file = file_backup;
         }
         console.log(name + " saved.");
     }
@@ -98,6 +110,7 @@
             name = "default" + default_counter;
             default_counter++;
         }
+        var file_backup = app.file;
         var meta = await app.db.files_meta.find("name",name);
         var bw = new BinaryWriter();
         bw.add(await value.arrayBuffer());
@@ -112,6 +125,10 @@
                 date : (new Date()).toISOString(), 
                 comments : "{}"
             });
+            await app.events.emit("file.changed");
+            await msg.$.elementSetPacketAsync(`<div style="font-size:30px;">${file_backup}</div>`);
+            app.file = file_backup;
+
         }
         console.log(name + " saved.");
     }
@@ -146,11 +163,15 @@
     app.delete = async function(name) {
         var meta = await app.db.files_meta.find("name",name);
         if(meta) {
+            var file_backup = app.file;
             console.log("A",meta.fileid);
             await app.db.files.delete(meta.fileid);
             var metaid = await app.db.files_meta.findId("name",name);
             console.log("B",metaid);
             await app.db.files_meta.delete(metaid);
+            await app.events.emit("file.changed");
+            await msg.$.elementSetPacketAsync(`<div style="font-size:30px;">${file_backup}</div>`);
+            app.file = file_backup;
         }
     }
     app.ls = async function() {
@@ -193,7 +214,7 @@
             window.URL.revokeObjectURL(url);
         }, 5000);
     }
-    app.build = function(code,recover,trackId) {
+    app.build = function(code,trackId) {
         var sb = [];
         if(trackId) {
             sb.push("app.events.emit(" + JSON.stringify(trackId) + ");");
@@ -203,16 +224,12 @@
 
             
             try {
-                
-                    
-                    `+code+`
+                `+code+`
                 ${sb.join("")}    
             } catch(e) {
                 mark.el.style.display = "";
                 mark.el.style.backgroundColor = "red";
-                `
-                +(recover? `app.restoreError();`:"")+
-                `
+                ${sb.join("")}
                 app.editor.updateOptions({ readOnly: false });
                 error.$.elementSetPacketAsync(\`<div style="font-size:20px;color:red;">\`+(""+e)+\`</div>\`);
                 setTimeout(()=>{
@@ -268,8 +285,21 @@
         } catch(e) {
             console.log(e);
             console.log(e.stack);
-            throw new Error("failed to load " + name);
+            throw new Error("failed to load " + name + " --> " + e.message);
         }
+    }
+    app.request = async function(method,url,options) {
+        var info = {
+            method : method,
+            url : url,
+            options : options
+        };
+        var req = await fetch("/api/request",{ 
+            method : "POST",
+            body : JSON.stringify(info)
+        });
+        var text = await req.text();
+        return text;
     }
     var ctrl = false;
     window.addEventListener("keydown",async (e)=>{
@@ -319,6 +349,9 @@
             language: "html",
             fontFamily : "'Noto Mono', 'Courier New', monospace"
         });
+        app.editor.flags = {
+            change : false
+        };
         //app.editor.model.onDidChangeContent((event) => {
           //  app.editor.setModelLanguage(app.editor.getModels()[0], languages[ext]);
         //});
@@ -327,42 +360,55 @@
             
         });
         app.editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KEY_O, function() {
-            app.editor.setValue("app.editor.setValue(await app.loadText(\"\"));");
+            app.editor.setValue(`var text = await app.loadText("");
+app.editor.setValue(text);
+app.editor.flags.change = true;
+`);
         });
         app.editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KEY_S, function() {
-            if(app.file) {
-                app.saveText(app.file,app.editor.getValue());
-            } else {
-                var filename = prompt("file name:");
-                if(filename && filename != "") {
-                    app.saveText(filename,app.editor.getValue());
+            (async ()=>{
+                if(app.file) {
+                    
+                    await app.saveText(app.file,app.editor.getValue());
                 } else {
-                    alert("not saved.");
+                    var filename = prompt("file name:");
+                    if(filename && filename != "") {
+                        await app.saveText(filename,app.editor.getValue());
+                    } else {
+                        alert("not saved.");
+                    }
                 }
-            }
+            })();
         });
         app.editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, function() {
             var current = app.file.slice(0);
-            var currentCode = app.editor.getValue();
+            const currentCode = app.editor.getValue();
             mark.el.style.display = "";
             mark.el.style.backgroundColor = "lime";
-            var code = app.build(currentCode,true,"execComplete");
+            var code = app.build(currentCode,"execComplete");
             console.log(code);
             app.editor.updateOptions({ readOnly: true });
-            eval(code);
-            var f = async ()=>{
+            console.log("START");
+            var f = async ()=>{ // this blocks manually change editor, if disable this it loads the last of execution
+                console.log("END2");
                 app.editor.updateOptions({ readOnly: false });
-                await app.loadText(current)
-                app.editor.setValue( currentCode );
+                if(!app.editor.flags.change) {
+                    app.file = current;
+                    app.editor.setValue( currentCode );
+                }
                 app.events.off("execComplete",f);
+                app.editor.flags.change = false;
             };
             app.events.on("execComplete",f);
+            eval(code);
+            console.log("END");
+            
             setTimeout(()=>{
                 mark.el.style.display = "none";
             },1000);
             
         });
-        btnSave.el.addEventListener("click",()=>{
+        btnSave.el.addEventListener("click",async ()=>{
             if(app.file) {
                 app.saveText(app.file,app.editor.getValue());
             } else {
@@ -374,9 +420,11 @@
                 }
             }
         });
-        btnSaveAs.el.addEventListener("click",()=>{
+        btnSaveAs.el.addEventListener("click",async ()=>{
             var filename = prompt("file name:");
-            app.saveText(filename,app.editor.getValue());
+            await app.saveText(filename,app.editor.getValue());
+            var text = await app.loadText(filename);
+            app.editor.setValue(text);
         });
         btnBackup.el.addEventListener("click",()=>{
             app.backup("backup");
@@ -460,7 +508,12 @@
                 reader.readAsArrayBuffer(file_info);
             }
         });
-        await app.loadSuper("/sys/boot.super");
+
+        try {
+            await app.loadSuper("/sys/boot.super");
+        } catch(e) {
+            error.$.elementSetPacketAsync(`<div style="font-size:20px;color:red;">`+(""+e)+`</div>`);
+        }
 
         var d = await app.loadText("default");
         if(d==null) {
