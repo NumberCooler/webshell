@@ -20,14 +20,7 @@
             <div style="flex:1;"></div>
             <div id="editorPanel">
                 <button id="btnSave" class="btn btn-primary my-1">Save</button>
-                <button id="btnSaveAs" class="btn btn-primary ml-1 my-1">Save as</button>
-                <button id="btnBackup" class="btn btn-primary ml-1 my-1">Backup</button>
-                <button class="btn btn-primary m-1" style="position:relative;">
-                    Upload
-                    <input type="file" id="btnRestore" value="restore" style="position:absolute;left:0px;top:0px;width:74px;height:40px;opacity:0.1;"/>
-                </button>
-
-                
+                <button id="btnSaveAs" class="btn btn-primary mx-1 my-1">Save as</button>
             </div>
         </div>
         <div id="mark" style="display:none;border:solid 1px #000;width:10px;height:10px;"></div>
@@ -215,6 +208,86 @@
             window.URL.revokeObjectURL(url);
         }, 5000);
     }
+    app.restore = async function(e) {
+
+        if(e.target.files.length>0) {
+            var file_info = e.target.files[0];
+            let reader = new FileReader();
+            async function overwrite_dialog(file) {
+                var choice = await new Promise(async (resolve,reject)=>{
+                    var schema = await msg.$.elementSetPacketAsync(`
+                        <div style="margin:10px;border:solid 1px #000;padding:20px;">
+                            <div style="font-size:30px;">Zip Restore</div>
+                            <div style="padding:20px;">
+                                <div>Do you like to overwrite ${file}?</div>
+                                <div>
+                                    <button id="btnYes">yes</button>
+                                    <button id="btnNo">no</button>
+                                    <button id="btnCancel">cancel</button>
+                                </div>
+                            </div>
+                        </div>
+                    `);
+                    schema.el.btnYes.addEventListener("click",()=>{
+                        resolve(1);
+                    });
+                    schema.el.btnNo.addEventListener("click",()=>{
+                        resolve(2);
+                    });
+                    schema.el.btnCancel.addEventListener("click",()=>{
+                        resolve(3);
+                    });
+                });
+                msg.$.elementsClear();
+                return choice;
+            }
+            reader.onload = async function(e2) {
+                console.log(file_info);
+                let blob = new Blob([new Uint8Array(e2.target.result)]);
+                if(file_info.type == "application/zip") {
+                    var zip = await JSZip.loadAsync(blob);
+                    var meta_json_str = await zip.file("__meta__.json").async("string");
+                    var meta_json = JSON.parse(meta_json_str);
+                    for(var file in meta_json) {
+                        var meta = await app.db.files_meta.find("name",file);
+                        console.log(file,meta_json[file]);
+                        if(meta == null) {
+                            if(meta_json[file].type == "text") {
+                                var text = await zip.file(file).async("string");
+                                app.saveText(file,text);
+                            } else {
+                                var fblob = await zip.file(file).async("blob");
+                                app.saveBlob(file,fblob);
+                            }
+                        } else {
+                            var choice = await overwrite_dialog(file);
+                            if(choice == 3) break;
+                            if(choice == 1) {
+                                if(meta_json[file].type == "text") {
+                                    var text = await zip.file(file).async("string");
+                                    app.saveText(file,text);
+                                } else {
+                                    var fblob = await zip.file(file).async("blob");
+                                    app.saveBlob(file,fblob);
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    var meta = await app.db.files_meta.find("name",file_info.name);
+                    if(meta==null) {
+                        app.saveBlob(file_info.name,blob);
+                    } else {
+                        var choice = await overwrite_dialog(file_info.name);
+                        if(choice == 1) {
+                            app.saveBlob(file,fblob);
+                        }
+                    }
+                }
+            };
+            reader.readAsArrayBuffer(file_info);
+        }
+    };
     app.build = function(code,trackId) {
         var sb = [];
         if(trackId) {
@@ -362,10 +435,14 @@
             
         });
         app.editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KEY_O, function() {
-            app.editor.setValue(`var text = await app.loadText("");
-app.editor.setValue(text);
-app.editor.flags.change = true;
-`);
+            app.editor.setValue(`
+                var filename = "";
+                var text = await app.loadText(filename);
+                app.file = filename;
+                app.sector.msg.$.elementSetPacketAsync(\`<div style="font-size:30px;">$` + `{filename}</div>\`);
+                app.editor.setValue(text);
+                app.editor.flags.change = true;
+            `);
         });
         app.editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KEY_S, function() {
             (async ()=>{
@@ -428,88 +505,7 @@ app.editor.flags.change = true;
             var text = await app.loadText(filename);
             app.editor.setValue(text);
         });
-        btnBackup.el.addEventListener("click",()=>{
-            app.backup("backup");
-        });
-        btnRestore.el.addEventListener("change",async (e)=>{
-            if(e.target.files.length>0) {
-                var file_info = e.target.files[0];
-                let reader = new FileReader();
-                async function overwrite_dialog(file) {
-                    var choice = await new Promise(async (resolve,reject)=>{
-                        var schema = await msg.$.elementSetPacketAsync(`
-                            <div style="margin:10px;border:solid 1px #000;padding:20px;">
-                                <div style="font-size:30px;">Zip Restore</div>
-                                <div style="padding:20px;">
-                                    <div>Do you like to overwrite ${file}?</div>
-                                    <div>
-                                        <button id="btnYes">yes</button>
-                                        <button id="btnNo">no</button>
-                                        <button id="btnCancel">cancel</button>
-                                    </div>
-                                </div>
-                            </div>
-                        `);
-                        schema.el.btnYes.addEventListener("click",()=>{
-                            resolve(1);
-                        });
-                        schema.el.btnNo.addEventListener("click",()=>{
-                            resolve(2);
-                        });
-                        schema.el.btnCancel.addEventListener("click",()=>{
-                            resolve(3);
-                        });
-                    });
-                    msg.$.elementsClear();
-                    return choice;
-                }
-                reader.onload = async function(e2) {
-                    console.log(file_info);
-                    let blob = new Blob([new Uint8Array(e2.target.result)]);
-                    if(file_info.type == "application/zip") {
-                        var zip = await JSZip.loadAsync(blob);
-                        var meta_json_str = await zip.file("__meta__.json").async("string");
-                        var meta_json = JSON.parse(meta_json_str);
-                        for(var file in meta_json) {
-                            var meta = await app.db.files_meta.find("name",file);
-                            console.log(file,meta_json[file]);
-                            if(meta == null) {
-                                if(meta_json[file].type == "text") {
-                                    var text = await zip.file(file).async("string");
-                                    app.saveText(file,text);
-                                } else {
-                                    var fblob = await zip.file(file).async("blob");
-                                    app.saveBlob(file,fblob);
-                                }
-                            } else {
-                                var choice = await overwrite_dialog(file);
-                                if(choice == 3) break;
-                                if(choice == 1) {
-                                    if(meta_json[file].type == "text") {
-                                        var text = await zip.file(file).async("string");
-                                        app.saveText(file,text);
-                                    } else {
-                                        var fblob = await zip.file(file).async("blob");
-                                        app.saveBlob(file,fblob);
-                                    }
-                                }
-                            }
-                        }
-                    } else {
-                        var meta = await app.db.files_meta.find("name",file_info.name);
-                        if(meta==null) {
-                            app.saveBlob(file_info.name,blob);
-                        } else {
-                            var choice = await overwrite_dialog(file_info.name);
-                            if(choice == 1) {
-                                app.saveBlob(file,fblob);
-                            }
-                        }
-                    }
-                };
-                reader.readAsArrayBuffer(file_info);
-            }
-        });
+        
 
         try {
             await app.loadSuper("/sys/boot.super");
