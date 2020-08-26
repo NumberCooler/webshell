@@ -352,10 +352,11 @@
             editorPanel.el.scrollIntoView();
         }
     };
-    app.loadSuper = async function(name,extra) {
+    app.loadSuper = async function(name,extra,target) {
         console.log(name);
         try {
             var s = await app.loadText(name);
+            target = target ? target : loader;
             console.log("load super:",name,s);
             if(s!=null) {
                 if(extra) {
@@ -365,7 +366,7 @@
                     for(var key in extra) {
                         sb.push(key + "={{this.extra[" + JSON.stringify(key)+"]}}");
                     }
-                    var schema = await loader.$.elementSetPacketAsync(`
+                    var schema = await target.$.elementSetPacketAsync(`
                         <Component id="control" srcData={{this.data}} app={{this.app}} ${sb.join(" ")}></Component>
                     `,{context:{
                         data:s, app,extra:args
