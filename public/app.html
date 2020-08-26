@@ -21,10 +21,14 @@
             <div id="editorPanel">
                 <button id="btnSave" class="btn btn-primary my-1">Save</button>
                 <button id="btnSaveAs" class="btn btn-primary mx-1 my-1">Save as</button>
+                <button class="btn btn-primary m-1" style="position:relative;">
+                    Upload
+                    <input type="file" id="btnUpload" value="restore" style="position:absolute;left:0px;top:0px;width:74px;height:40px;opacity:0.1;"/>
+                </button>
             </div>
         </div>
         <div id="mark" style="display:none;border:solid 1px #000;width:10px;height:10px;"></div>
-        <div id="editorContainer" style="border:solid 1px #000;width:800px;">
+        <div id="editorContainer" style="border:solid 1px #000;width:800px;opacity:0.8;">
             <div id="editor" style="position:relative;width:800px;height:780px;"></div>
         </div>
         
@@ -32,8 +36,9 @@
     </div>
 </div>
 <script>
-    editorContainer.el.style.width = (window.innerWidth-40) + "px";
-    editor.el.style.width = (window.innerWidth-40) + "px";
+
+    
+
     const AssetSpec = {
         name : "test",
         releases : [{
@@ -59,7 +64,15 @@
         }]
     };
     var app = {};
-    window.APP = app;
+    window.APP = app; // DEBUG
+    editorContainer.el.style.width = (window.innerWidth-40) + "px";
+    editor.el.style.width = (window.innerWidth-40) + "px";
+    window.addEventListener("resize",()=>{
+        editorContainer.el.style.width = (window.innerWidth-40) + "px";
+        editor.el.style.width = (window.innerWidth-40) + "px";
+        app.editor.layout();
+    });
+    
     app.events = Class.create("WithEvents");
     app.settings = {
         terminal : {
@@ -71,6 +84,11 @@
         msg,
         error,
         loader
+    };
+    app.keyboard = {
+        ctrl : false,
+        shift : false,
+        alt : false
     };
     app.db = await IDB.exports.service(AssetSpec);
     app.saveText = async function(name,value) {
@@ -96,7 +114,7 @@
             app.file = file_backup;
         }
         console.log(name + " saved.");
-    }
+    };
     var default_counter = 0;
     app.saveBlob = async function(name,value) {
         if(name === null || name === undefined || Object.prototype.toString.apply(name) != "[object String]" || name == "" ) {
@@ -125,7 +143,7 @@
 
         }
         console.log(name + " saved.");
-    }
+    };
     app.loadText = async function(name) {
         if(name === null || name === undefined || Object.prototype.toString.apply(name) != "[object String]" || name == "" ) {
             alert("name not defined (2).");
@@ -142,7 +160,7 @@
         }
         console.log("not found : " + name);
         return null;
-    }
+    };
     app.loadBlob = async function(name) {
         var meta = await app.db.files_meta.find("name",name);
         if(meta && meta.type == "blob") {
@@ -153,7 +171,14 @@
         }
         console.log("not found : " + name);
         return null;
-    }
+    };
+    app.open = async function(filename) {
+        var text = await app.loadText(filename);
+        app.file = filename;
+        app.sector.msg.$.elementSetPacketAsync(`<div style="font-size:30px;">${filename}</div>`);
+        app.editor.setValue(text);
+        app.editor.flags.change = true;
+    };
     app.delete = async function(name) {
         var meta = await app.db.files_meta.find("name",name);
         if(meta) {
@@ -167,7 +192,7 @@
             await msg.$.elementSetPacketAsync(`<div style="font-size:30px;">${file_backup}</div>`);
             app.file = file_backup;
         }
-    }
+    };
     app.ls = async function() {
         var ret = [];
         var ids = await app.db.files_meta.findAllIds();
@@ -175,11 +200,11 @@
             ret.push(await app.db.files_meta.find(ids[x]));
         }
         return ret;
-    }
+    };
     app.context = {};
     app.restoreError = async function() {
         app.editor.setValue(await app.loadText(app.file));
-    }
+    };
     app.backup = async function(name) {
         var zip = new JSZip();
         var ids = await app.db.files_meta.findAllIds();
@@ -207,7 +232,7 @@
             document.body.removeChild(a);
             window.URL.revokeObjectURL(url);
         }, 5000);
-    }
+    };
     app.restore = async function(e) {
 
         if(e.target.files.length>0) {
@@ -314,7 +339,7 @@
                 },5000);
             }
         })();`;
-    }
+    };
     app.toogleTerminal = function() {
         if(app.settings.terminal.visible) {
             terminal.el.style.display = "none";
@@ -326,7 +351,7 @@
             app.editor.focus();
             editorPanel.el.scrollIntoView();
         }
-    }
+    };
     app.loadSuper = async function(name,extra) {
         console.log(name);
         try {
@@ -362,8 +387,9 @@
             console.log(e.stack);
             throw new Error("failed to load " + name + " --> " + e.message);
         }
-    }
+    };
     app.request = async function(method,url,options) {
+        options = options || {};
         var info = {
             method : method,
             url : url,
@@ -375,47 +401,53 @@
         });
         var text = await req.text();
         return text;
-    }
+    };
     var ctrl = false;
     window.addEventListener("keydown",async (e)=>{
         console.log(e.keyCode);
-        if(ctrl && e.keyCode == 68) {
+        if(app.keyboard.ctrl && e.keyCode == 68) {
             e.preventDefault();
             var text = await app.loadText("default");
             app.editor.setValue(text);
             return false;
-            
         }
-        if(ctrl && (e.keyCode == 79 || e.keyCode == 83)) {
+        if(app.keyboard.ctrl && (e.keyCode == 79 || e.keyCode == 83)) {
             e.preventDefault();
         }
-        if(e.keyCode == 17) {
-            ctrl = true;
-        }
 
-        if(ctrl && e.keyCode == 192) {
+        if(e.keyCode == 16) {
+            app.keyboard.shift = true;
+        }
+        if(e.keyCode == 17) {
+            app.keyboard.ctrl = true;
+        }
+        if(e.keyCode == 18) {
+            app.keyboard.alt = true;
+        }
+        if(app.keyboard.ctrl && e.keyCode == 192) {
             e.preventDefault();
             app.toogleTerminal();
             
         }
-
         return false;
     },true)
     window.addEventListener("keyup",(e)=>{
-        
+        if(e.keyCode == 16) {
+            app.keyboard.shift = false;
+        }
         if(e.keyCode == 17) {
-            ctrl = false;
+            app.keyboard.ctrl = false;
+        }
+        if(e.keyCode == 18) {
+            app.keyboard.alt = false;
         }
         //e.preventDefault();
-
-        if(!ctrl) {
+        if(!app.keyboard.ctrl) {
             if(e.keyCode == 27) {
                 app.editor.focus();
             }
             return true;
         }
-
-        
         return false;
     },true);
     require(['vs/editor/editor.main'], async function() {
@@ -435,14 +467,7 @@
             
         });
         app.editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KEY_O, function() {
-            app.editor.setValue(`
-                var filename = "";
-                var text = await app.loadText(filename);
-                app.file = filename;
-                app.sector.msg.$.elementSetPacketAsync(\`<div style="font-size:30px;">$` + `{filename}</div>\`);
-                app.editor.setValue(text);
-                app.editor.flags.change = true;
-            `);
+            app.editor.setValue(`app.open("default");`);
         });
         app.editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KEY_S, function() {
             (async ()=>{
@@ -502,11 +527,14 @@
         btnSaveAs.el.addEventListener("click",async ()=>{
             var filename = prompt("file name:");
             await app.saveText(filename,app.editor.getValue());
+            app.file = filename;
             var text = await app.loadText(filename);
             app.editor.setValue(text);
+            app.sector.msg.$.elementSetPacketAsync(`<div style="font-size:30px;">${filename}</div>`);
         });
-        
-
+        btnUpload.el.addEventListener("change",async (e)=>{
+            await app.restore(e);
+        });
         try {
             await app.loadSuper("/sys/boot.super");
         } catch(e) {
