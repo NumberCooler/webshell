@@ -408,8 +408,8 @@
         console.log(e.keyCode);
         if(app.keyboard.ctrl && e.keyCode == 68) {
             e.preventDefault();
-            var text = await app.loadText("default");
-            app.editor.setValue(text);
+            await app.open("default");
+
             return false;
         }
         if(app.keyboard.ctrl && (e.keyCode == 79 || e.keyCode == 83)) {
