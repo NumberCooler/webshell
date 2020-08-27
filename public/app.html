@@ -92,6 +92,20 @@
     };
     app.db = await IDB.exports.service(AssetSpec);
     app.saveText = async function(name,value) {
+
+        if(name === null || name === undefined || Object.prototype.toString.apply(name) != "[object String]" || name == "" ) {
+            alert("name not defined (1).");
+            name = "default" + default_counter;
+            default_counter++;
+        }
+
+        var parts = name.split("/");
+        if(parts[0] == "" && parts.length>1) { // has / at first
+
+        } else if(parts[0] != "" && parts.length>1) {
+            name = "/" + name; // normalize path
+        }
+
         var file_backup = app.file;
         var meta = await app.db.files_meta.find("name",name);
         var bw = new BinaryWriter();
@@ -122,6 +136,14 @@
             name = "default" + default_counter;
             default_counter++;
         }
+
+        var parts = name.split("/");
+        if(parts[0] == "" && parts.length>1) { // has / at first
+
+        } else if(parts[0] != "" && parts.length>1) {
+            name = "/" + name; // normalize path
+        }
+
         var file_backup = app.file;
         var meta = await app.db.files_meta.find("name",name);
         var bw = new BinaryWriter();
@@ -150,6 +172,14 @@
             name = "default" + default_counter;
             default_counter++;
         }
+
+        var parts = name.split("/");
+        if(parts[0] == "" && parts.length>1) { // has / at first
+
+        } else if(parts[0] != "" && parts.length>1) {
+            name = "/" + name; // normalize path
+        }
+
         var meta = await app.db.files_meta.find("name",name);
         if(meta && meta.type == "text") {
             var blob = await app.db.files.find(meta.fileid);
@@ -162,6 +192,21 @@
         return null;
     };
     app.loadBlob = async function(name) {
+
+        if(name === null || name === undefined || Object.prototype.toString.apply(name) != "[object String]" || name == "" ) {
+            alert("name not defined (2).");
+            name = "default" + default_counter;
+            default_counter++;
+        }
+
+        var parts = name.split("/");
+        
+        if(parts[0] == "" && parts.length>1) { // has / at first
+
+        } else if(parts[0] != "" && parts.length>1) {
+            name = "/" + name; // normalize path
+        }
+        
         var meta = await app.db.files_meta.find("name",name);
         if(meta && meta.type == "blob") {
             var blob = await app.db.files.find(meta.fileid);
@@ -173,6 +218,14 @@
         return null;
     };
     app.open = async function(filename) {
+
+        var parts = filename.split("/");
+        if(parts[0] == "" && parts.length>1) { // has / at first
+
+        } else if(parts[0] != "" && parts.length>1) {
+            filename = "/" + filename; // normalize path
+        }
+
         var text = await app.loadText(filename);
         app.file = filename;
         app.sector.msg.$.elementSetPacketAsync(`<div style="font-size:30px;">${filename}</div>`);
@@ -477,8 +530,21 @@
                     await app.saveText(app.file,app.editor.getValue());
                 } else {
                     var filename = prompt("file name:");
+
+                    var parts = filename.split("/");
+                    if(parts[0] == "" && parts.length>1) { // has / at first
+
+                    } else if(parts[0] != "" && parts.length>1) {
+                        filename = "/" + filename; // normalize path
+                    }
+
                     if(filename && filename != "") {
                         await app.saveText(filename,app.editor.getValue());
+
+                        var text = await app.loadText(filename);
+                        app.editor.setValue(text);
+                        app.sector.msg.$.elementSetPacketAsync(`<div style="font-size:30px;">${filename}</div>`);
+
                     } else {
                         alert("not saved.");
                     }
@@ -518,8 +584,20 @@
                 app.saveText(app.file,app.editor.getValue());
             } else {
                 var filename = prompt("file name:");
+
+                var parts = filename.split("/");
+                if(parts[0] == "" && parts.length>1) { // has / at first
+
+                } else if(parts[0] != "" && parts.length>1) {
+                    filename = "/" + filename; // normalize path
+                }
+
                 if(filename && filename != "") {
                     app.saveText(filename,app.editor.getValue());
+
+                    var text = await app.loadText(filename);
+                    app.editor.setValue(text);
+                    app.sector.msg.$.elementSetPacketAsync(`<div style="font-size:30px;">${filename}</div>`);
                 } else {
                     alert("not saved.");
                 }
@@ -527,6 +605,14 @@
         });
         btnSaveAs.el.addEventListener("click",async ()=>{
             var filename = prompt("file name:");
+
+            var parts = filename.split("/");
+            if(parts[0] == "" && parts.length>1) { // has / at first
+
+            } else if(parts[0] != "" && parts.length>1) {
+                filename = "/" + filename; // normalize path
+            }
+
             await app.saveText(filename,app.editor.getValue());
             app.file = filename;
             var text = await app.loadText(filename);

@@ -100,7 +100,7 @@ try {
         followRedirects : false,
         ssl : false
     });
-    proxy.listen(8081,() => { console.log("proxy in 8081"); });
+    proxy.listen(8081,() => { console.log("proxy in http://localhost:8081/"); });
 } catch(e) {
     console.log(e);
     if(proxy) {
@@ -110,7 +110,7 @@ try {
 
 var port = 8080;
 server.listen(port,()=>{
-    console.log('listening ' + port);
+    console.log('server in http://localhost:' + port+"/");
 });
 
 
